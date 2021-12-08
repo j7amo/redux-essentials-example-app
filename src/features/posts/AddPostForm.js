@@ -32,6 +32,7 @@ export const AddPostForm = () => {
     // небольшая валидация
     if (title && content) {
       dispatch(
+        // то, что мы передаём в качестве аргумента в экшен-криэйтор записывается в action.payload судя по всему
         postAdded({
           // генерируем ID
           id: nanoid(),

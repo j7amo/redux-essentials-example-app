@@ -1,10 +1,10 @@
-import { createSlice } from '@reduxjs/toolkit'; // импортируем функцию createSlice из RTK
+import { createSlice } from '@reduxjs/toolkit' // импортируем функцию createSlice из RTK
 
 // инициализируем начальный стейт
 const initialState = [
-	{ id: '1', title: 'First Post!', content: 'Hello!' },
-	{ id: '2', title: 'Second Post', content: 'More text' }
-];
+  { id: '1', title: 'First Post!', content: 'Hello!' },
+  { id: '2', title: 'Second Post', content: 'More text' },
+]
 
 // функция createSlice ожидает от нас объект, в котором будут:
 // 1) Поле name, в котором мы зададим имя слайса. Это имя будет использоваться при формировании строкового значения
@@ -17,25 +17,37 @@ const initialState = [
 // именем слайса (поле name).
 // То есть в итоге в объекте экшена поле type формируется так: name + "/" + идентификатор соотв. экшен-криэйтора.
 const postsSlice = createSlice({
-	name: 'posts',
-	initialState,
-	reducers: {
-		postAdded(state, action) {
-			// одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
-			// библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
-			// стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
-			// стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
-			state.push(action.payload);
-		},
-	}
-});
+  name: 'posts',
+  initialState,
+  reducers: {
+    postAdded(state, action) {
+      // одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
+      // библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
+      // стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
+      // стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
+      state.push(action.payload)
+    },
+    // добавим редьюсер на случай обновления поста
+    postUpdated(state, action) {
+      // можно было бы написать так и это было бы очень кратко и удобно:
+      // state[action.payload.id] = action.payload
+      // НО! Тогда у нас происходит по сути замена объекта и возможны лишние перерисовки, которые нам не нужны.
+      // Поэтому мы возьмём существующий объект и точечно изменим только то, что меняется:
+      const { id, title, content } = action.payload;
+      const postToEdit = state.find(elem => elem.id === id);
+      if (postToEdit) {
+        postToEdit.title = title;
+        postToEdit.content = content;
+      }
+    },
+  },
+})
 
 // Функция createSlice одновременно с тем как мы добавляем редьюсер в объект reducers неявно создаёт
 // экшен-криэйтор с точно таким же идентификатором (просто он хранится на другом объекте - slice.actions)
 // "достаём" его из этого объекта и экспортируем, чтобы потом его использовать в UI
-export const { postAdded } = postsSlice.actions;
+export const { postAdded, postUpdated } = postsSlice.actions
 
 // после создания слайса нам нужно экспортировать объект редьюсера,
 // чтобы можно было в корневом редьюсере зайти в этот объект и по ссылкам непосредственно обратиться к функциям-редьюсерам
-export default postsSlice.reducer;
-
+export default postsSlice.reducer
