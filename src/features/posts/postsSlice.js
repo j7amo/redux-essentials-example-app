@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit' // импортируем функцию createSlice из RTK
+import {createSlice, nanoid} from '@reduxjs/toolkit' // импортируем функцию createSlice из RTK
 
 // инициализируем начальный стейт
 const initialState = [
@@ -20,12 +20,30 @@ const postsSlice = createSlice({
   name: 'posts',
   initialState,
   reducers: {
-    postAdded(state, action) {
-      // одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
-      // библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
-      // стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
-      // стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
-      state.push(action.payload)
+    // здесь важно обратить внимание на то, что редьюсер postAdded написан по-другому, если сравнивать его с
+    // редьюсером postUpdated. Если postUpdated внешне является простой функцией, которая принимает аргументы state и action.
+    // То postAdded это уже объект! Такой формат написания редьюсеров в рамках RTK используется тогда, когда мы хотим
+    // перенести подготовку объекта payload ИЗ React-компонента прямо В Redux. Для этого нам нужно добавить ещё функцию (смотри ниже)
+    postAdded: {
+      reducer(state, action) {
+        // одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
+        // библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
+        // стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
+        // стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
+        state.push(action.payload)
+      },
+      // вот здесь и происходит добавление функции, которая занимается подготовкой объекта payload
+      // здесь нужно обратить внимание на то, что это НЕ редьюсер! В отличие от редьюсеров это обычная функция! Она никак не работает со стейтом!
+      // И следовательно она не обязана быть чистой! Именно поэтому мы совершенно не пугаясь добавляем прямо в функцию генератор ID.
+      prepare(title, content) {
+        return {
+          payload: {
+            id: nanoid(),
+            title,
+            content
+          }
+        }
+      }
     },
     // добавим редьюсер на случай обновления поста
     postUpdated(state, action) {
@@ -33,11 +51,11 @@ const postsSlice = createSlice({
       // state[action.payload.id] = action.payload
       // НО! Тогда у нас происходит по сути замена объекта и возможны лишние перерисовки, которые нам не нужны.
       // Поэтому мы возьмём существующий объект и точечно изменим только то, что меняется:
-      const { id, title, content } = action.payload;
-      const postToEdit = state.find(elem => elem.id === id);
+      const { id, title, content } = action.payload
+      const postToEdit = state.find((elem) => elem.id === id)
       if (postToEdit) {
-        postToEdit.title = title;
-        postToEdit.content = content;
+        postToEdit.title = title
+        postToEdit.content = content
       }
     },
   },
