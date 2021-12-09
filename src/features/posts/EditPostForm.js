@@ -45,6 +45,7 @@ export const EditPostForm = ({ match }) => {
           type="text"
           id="postTitle"
           name="postTitle"
+          placeholder="What's on your mind?"
           value={title}
           onChange={onTitleChanged}
         />

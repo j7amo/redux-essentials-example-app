@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { useDispatch } from 'react-redux'
-import { nanoid } from '@reduxjs/toolkit'
+import { useSelector, useDispatch } from 'react-redux'
 
 import { postAdded } from './postsSlice'
 
@@ -19,6 +18,11 @@ export const AddPostForm = () => {
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [userId, setUserId] = useState('')
+
+  // получаем из стейта доступных пользователей (теперь в стейте появилось новое поле state.users, где будут храниться
+  // актуальные данные всех пользователей
+  const users = useSelector((state) => state.users)
 
   // получаем dispatch
   const dispatch = useDispatch()
@@ -26,6 +30,7 @@ export const AddPostForm = () => {
   // коллбэки для обработки событий onChange инпутов
   const onTitleChanged = (e) => setTitle(e.target.value)
   const onContentChanged = (e) => setContent(e.target.value)
+  const onAuthorChanged = (e) => setUserId(e.target.value)
 
   // коллбэк для обработки клика по кнопке сабмита формы
   const onSavePostClick = () => {
@@ -45,7 +50,7 @@ export const AddPostForm = () => {
         // ==============================
         // Теперь же во 2-ой редакции мы передаём нужные данные, но в произвольной форме - в виде обычного списка аргументов,
         // правильный объект теперь будет формироваться в Redux-слое в конкретном слайсе postsSlice с помощью коллбэка prepare
-        postAdded(title, content)
+        postAdded(title, content, userId)
       )
     }
 
@@ -53,6 +58,16 @@ export const AddPostForm = () => {
     setTitle('')
     setContent('')
   }
+
+  // добавим флаг, на основе которого мы будем принимать решение об активности кнопки
+  const canSavePost = title && content && userId
+
+  // генерируем элементы <option>
+  const usersOptions = users.map((user) => (
+    <option key={user.id} value={user.id}>
+      {user.name}
+    </option>
+  ))
 
   return (
     <section>
@@ -63,9 +78,15 @@ export const AddPostForm = () => {
           type="text"
           id="postTitle"
           name="postTitle"
+          placeholder="What's on your mind?"
           value={title}
           onChange={onTitleChanged}
         />
+        <label htmlFor="postAuthor">Author:</label>
+        <select id="postAuthor" value={userId} onChange={onAuthorChanged}>
+          <option value=""/>
+          {usersOptions}
+        </select>
         <label htmlFor="postContent">Content:</label>
         <textarea
           id="postContent"
@@ -73,7 +94,7 @@ export const AddPostForm = () => {
           value={content}
           onChange={onContentChanged}
         />
-        <button type="button" onClick={onSavePostClick}>
+        <button type="button" onClick={onSavePostClick} disabled={!canSavePost}>
           Save Post
         </button>
       </form>

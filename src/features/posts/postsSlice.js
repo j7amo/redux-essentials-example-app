@@ -1,9 +1,39 @@
-import {createSlice, nanoid} from '@reduxjs/toolkit' // импортируем функцию createSlice из RTK
+import { createSlice, nanoid } from '@reduxjs/toolkit'
+import { sub } from 'date-fns'
 
 // инициализируем начальный стейт
 const initialState = [
-  { id: '1', title: 'First Post!', content: 'Hello!' },
-  { id: '2', title: 'Second Post', content: 'More text' },
+  {
+    id: '1',
+    title: 'First Post!',
+    content: 'Hello!',
+    // воспользуемся функцией sub из библиотеки "date-fns", эта функция позволяет отнимать от какой-то даты заданное
+    // количество единиц времени
+    date: sub(new Date(), { minutes: 10 }).toISOString(),
+    // добавим объект с полями разных реакций на пост и счётчиками для каждой из них
+    reactions: {
+      thumbsUp: 0,
+      hooray: 0,
+      heart: 0,
+      rocket: 0,
+      eyes: 0,
+    },
+  },
+  {
+    id: '2',
+    title: 'Second Post',
+    content: 'More text',
+    // добавляя такие вычисления в стейт мы имитируем разное время создания постов
+    date: sub(new Date(), { minutes: 5 }).toISOString(),
+    // добавим объект с полями разных реакций на пост и счётчиками для каждой из них
+    reactions: {
+      thumbsUp: 0,
+      hooray: 0,
+      heart: 0,
+      rocket: 0,
+      eyes: 0,
+    },
+  },
 ]
 
 // функция createSlice ожидает от нас объект, в котором будут:
@@ -35,15 +65,32 @@ const postsSlice = createSlice({
       // вот здесь и происходит добавление функции, которая занимается подготовкой объекта payload
       // здесь нужно обратить внимание на то, что это НЕ редьюсер! В отличие от редьюсеров это обычная функция! Она никак не работает со стейтом!
       // И следовательно она не обязана быть чистой! Именно поэтому мы совершенно не пугаясь добавляем прямо в функцию генератор ID.
-      prepare(title, content) {
+      prepare(title, content, userId) {
         return {
           payload: {
             id: nanoid(),
+            // нужно обратить внимание на то, что просто написать date: new Date() мы НЕ можем, хотя на первый взгляд
+            // это будет экземпляр даты для конкретного момента времени, когда отработал экшен-криэйтор postAdded.
+            // Объясняется это тем, что в Redux можно хранить только SERIALIZABLE данные, а new Date() по мнению
+            // Redux - NON_SERIALIZABLE (спорный момент, если учесть, что у Date есть toJSON)
+            date: new Date().toISOString(),
             title,
-            content
-          }
+            content,
+            user: userId,
+            // ВАЖНО! Здесь забыл добавить объект с полями разных реакций на пост и счётчиками для каждой из них и попал на поиски бага на целый час.
+            // Идея в том, что все свежесозданные объекты должны иметь поле reactions (оно потом "на местах" считывается для отрисовки кнопок реакций).
+            // А так как сам редьюсер просто пушит payload в стейт, а payload мы практически целиком готовим в коллбэке prepare, то именно
+            // здесь и нужно позаботиться о добавлении этого поля / свойства
+            reactions: {
+              thumbsUp: 0,
+              hooray: 0,
+              heart: 0,
+              rocket: 0,
+              eyes: 0,
+            },
+          },
         }
-      }
+      },
     },
     // добавим редьюсер на случай обновления поста
     postUpdated(state, action) {
@@ -58,13 +105,21 @@ const postsSlice = createSlice({
         postToEdit.content = content
       }
     },
+    // добавим редьюсер на добавление реакции на пост
+    reactionAdded(state, action) {
+      const { postId, reaction } = action.payload
+      const existingPost = state.find((post) => post.id === postId)
+      if (existingPost) {
+        existingPost.reactions[reaction]++
+      }
+    },
   },
 })
 
 // Функция createSlice одновременно с тем как мы добавляем редьюсер в объект reducers неявно создаёт
 // экшен-криэйтор с точно таким же идентификатором (просто он хранится на другом объекте - slice.actions)
 // "достаём" его из этого объекта и экспортируем, чтобы потом его использовать в UI
-export const { postAdded, postUpdated } = postsSlice.actions
+export const { postAdded, postUpdated, reactionAdded } = postsSlice.actions
 
 // после создания слайса нам нужно экспортировать объект редьюсера,
 // чтобы можно было в корневом редьюсере зайти в этот объект и по ссылкам непосредственно обратиться к функциям-редьюсерам

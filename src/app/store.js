@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
-import postsReducer from '../features/posts/postsSlice';
+import postsReducer from '../features/posts/postsSlice'
+import usersReducer from '../features/users/usersSlice'
 
 export default configureStore({
   // функция configureStore ожидает в качестве аргумента объект с полем reducer (видимо, такое соглашение),
@@ -10,5 +11,6 @@ export default configureStore({
   // Эти редьюсеры генерируются с помощью функции createSlice при создании каждого слайса.
   reducer: {
     posts: postsReducer,
+    users: usersReducer,
   },
 })

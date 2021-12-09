@@ -1,6 +1,9 @@
 import React from 'react'
 import { useSelector } from 'react-redux'
-import {Link} from 'react-router-dom';
+import { Link } from 'react-router-dom'
+import { PostAuthor } from './PostAuthor'
+import { TimeAgo } from './TimeAgo'
+import { ReactionButtons } from './ReactionButtons'
 
 // здесь нужно обратить внимание на то, что мы деструктурируем пропы и "достаём" из них объект match,
 // который нам заботливо передаёт React Router
@@ -35,16 +38,19 @@ export const SinglePostPage = ({ match }) => {
     )
   }
 
-	// ну и напишем разметку на случай, если пост найден
+  // ну и напишем разметку на случай, если пост найден
   return (
     <section>
       <article className="post">
         <h2>{post.title}</h2>
+        <div>
+          <PostAuthor userId={post.user} />
+          <TimeAgo timestamp={post.date} />
+        </div>
         <p className="post-content">{post.content}</p>
+        <ReactionButtons post={post} />
         {/* добавим компонент Link для воздействия на адресную строку и как следствие срабатывания роутинга */}
-        <Link to={`/editpost/${post.id}`}>
-          Edit post
-        </Link>
+        <Link to={`/editpost/${post.id}`}>Edit post</Link>
       </article>
     </section>
   )
