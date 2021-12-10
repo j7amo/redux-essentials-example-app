@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { PostAuthor } from './PostAuthor'
 import { TimeAgo } from './TimeAgo'
 import { ReactionButtons } from './ReactionButtons'
+import { selectPostById } from './postsSlice'
 
 // здесь нужно обратить внимание на то, что мы деструктурируем пропы и "достаём" из них объект match,
 // который нам заботливо передаёт React Router
@@ -23,9 +24,7 @@ export const SinglePostPage = ({ match }) => {
 
   // теперь когда мы определили ID нужного нам поста, мы можем обратиться к Redux'у с помощью хука useSelector
   // и "достать" нужные нам для отрисовки данные
-  const post = useSelector((state) =>
-    state.posts.find((elem) => elem.id === postId)
-  )
+  const post = useSelector((state) => selectPostById(state, postId))
 
   // ВНИМАНИЕ! Интересный момент: никогда раньше не задумывался, но return'ов может быть сколько угодно, оказывается
   // главное, чтобы одновременно отрабатывал только один

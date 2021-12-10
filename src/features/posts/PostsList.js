@@ -4,11 +4,12 @@ import { Link } from 'react-router-dom'
 import { PostAuthor } from './PostAuthor'
 import { TimeAgo } from './TimeAgo'
 import { ReactionButtons } from './ReactionButtons'
+import { selectAllPosts } from './postsSlice'
 
 export const PostsList = () => {
   // используем хук useSelector, который позволяет нам извлекать любые "кусочки" глобального стейта, передавая
   // в него (в хук) в качестве коллбэка заранее определённый либо тут же инлайново написанный селектор
-  const posts = useSelector((state) => state.posts)
+  const posts = useSelector(selectAllPosts)
 
   // обычно более свежие посты в приложениях находятся выше, чем более старые, поэтому нам надо отсортировать
   // по дате. Метод sort согласно документации сортирует массив "in place", то есть мутирует, чего делать не надо.
