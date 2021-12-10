@@ -1,40 +1,37 @@
-import { createSlice, nanoid } from '@reduxjs/toolkit'
-import { sub } from 'date-fns'
+import { createSlice, nanoid, createAsyncThunk } from '@reduxjs/toolkit'
+import { client } from '../../api/client'
 
 // инициализируем начальный стейт
-const initialState = [
-  {
-    id: '1',
-    title: 'First Post!',
-    content: 'Hello!',
-    // воспользуемся функцией sub из библиотеки "date-fns", эта функция позволяет отнимать от какой-то даты заданное
-    // количество единиц времени
-    date: sub(new Date(), { minutes: 10 }).toISOString(),
-    // добавим объект с полями разных реакций на пост и счётчиками для каждой из них
-    reactions: {
-      thumbsUp: 0,
-      hooray: 0,
-      heart: 0,
-      rocket: 0,
-      eyes: 0,
-    },
-  },
-  {
-    id: '2',
-    title: 'Second Post',
-    content: 'More text',
-    // добавляя такие вычисления в стейт мы имитируем разное время создания постов
-    date: sub(new Date(), { minutes: 5 }).toISOString(),
-    // добавим объект с полями разных реакций на пост и счётчиками для каждой из них
-    reactions: {
-      thumbsUp: 0,
-      hooray: 0,
-      heart: 0,
-      rocket: 0,
-      eyes: 0,
-    },
-  },
-]
+const initialState = {
+  posts: [],
+  status: 'idle',
+  error: null,
+}
+
+// функция fetchPosts это thunk-creator
+// мы создаём его с помощью встроенной функции createAsyncThunk, которая принимает 2 аргумента:
+// 1) Строку, которая будет использоваться в качестве префикса при генерации типов в экшен-объектах
+// 2) Коллбэк, который должен возвращать Promise (зарезолвленный / зареджектенный), на основе которого создаётся PAYLOAD
+// в нашем случае мы видим, что в качестве коллбэка выступает асинхронная функция, результатом работы которой всегда будет Promise - то, что надо!
+export const fetchPosts = createAsyncThunk('posts/fetchPosts', async () => {
+  const response = await client.get('/fakeApi/posts')
+  // нужно отдельно пояснить эту строчку
+  // так как структура ответа с импровизированного бэка такая {data: []}, а нам нужен только массив постов,
+  // то мы в payload-creator'е возвращаем промис, который резолвится сразу с массивом, а не со всем объектом с полем data (что нам не нужно)
+  return response.data
+})
+
+// добавим ещё один асинхронный thunk-creator, только теперь для добавления нового поста
+export const addNewPost = createAsyncThunk(
+  'posts/addNewPost',
+  // The payload creator receives the partial `{title, content, user}` object
+  async (initialPost) => {
+    // We send the initial data to the fake API server
+    const response = await client.post('/fakeApi/posts', initialPost)
+    // The response includes the complete post object, including unique ID
+    return response.data
+  }
+)
 
 // функция createSlice ожидает от нас объект, в котором будут:
 // 1) Поле name, в котором мы зададим имя слайса. Это имя будет использоваться при формировании строкового значения
@@ -54,44 +51,44 @@ const postsSlice = createSlice({
     // редьюсером postUpdated. Если postUpdated внешне является простой функцией, которая принимает аргументы state и action.
     // То postAdded это уже объект! Такой формат написания редьюсеров в рамках RTK используется тогда, когда мы хотим
     // перенести подготовку объекта payload ИЗ React-компонента прямо В Redux. Для этого нам нужно добавить ещё функцию (смотри ниже)
-    postAdded: {
-      reducer(state, action) {
-        // одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
-        // библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
-        // стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
-        // стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
-        state.push(action.payload)
-      },
-      // вот здесь и происходит добавление функции, которая занимается подготовкой объекта payload
-      // здесь нужно обратить внимание на то, что это НЕ редьюсер! В отличие от редьюсеров это обычная функция! Она никак не работает со стейтом!
-      // И следовательно она не обязана быть чистой! Именно поэтому мы совершенно не пугаясь добавляем прямо в функцию генератор ID.
-      prepare(title, content, userId) {
-        return {
-          payload: {
-            id: nanoid(),
-            // нужно обратить внимание на то, что просто написать date: new Date() мы НЕ можем, хотя на первый взгляд
-            // это будет экземпляр даты для конкретного момента времени, когда отработал экшен-криэйтор postAdded.
-            // Объясняется это тем, что в Redux можно хранить только SERIALIZABLE данные, а new Date() по мнению
-            // Redux - NON_SERIALIZABLE (спорный момент, если учесть, что у Date есть toJSON)
-            date: new Date().toISOString(),
-            title,
-            content,
-            user: userId,
-            // ВАЖНО! Здесь забыл добавить объект с полями разных реакций на пост и счётчиками для каждой из них и попал на поиски бага на целый час.
-            // Идея в том, что все свежесозданные объекты должны иметь поле reactions (оно потом "на местах" считывается для отрисовки кнопок реакций).
-            // А так как сам редьюсер просто пушит payload в стейт, а payload мы практически целиком готовим в коллбэке prepare, то именно
-            // здесь и нужно позаботиться о добавлении этого поля / свойства
-            reactions: {
-              thumbsUp: 0,
-              hooray: 0,
-              heart: 0,
-              rocket: 0,
-              eyes: 0,
-            },
-          },
-        }
-      },
-    },
+    // postAdded: {
+    //   reducer(state, action) {
+    //     // одним из преимуществ RTK является то, что функция createSlice (а также createReducer) использует "под капотом"
+    //     // библиотеку Immer(которая в свою очередь использует Proxy), которая позволяет нам писать логику обновления
+    //     // стейта при помощи мутирующего синтаксиса (без спрэд-операторов и прочих приколов), но "за кулисами" обновление
+    //     // стейта всё равно происходит БЕЗ мутирования (просто мы этого не видим).
+    //     state.posts.push(action.payload)
+    //   },
+    //   // вот здесь и происходит добавление функции, которая занимается подготовкой объекта payload
+    //   // здесь нужно обратить внимание на то, что это НЕ редьюсер! В отличие от редьюсеров это обычная функция! Она никак не работает со стейтом!
+    //   // И следовательно она не обязана быть чистой! Именно поэтому мы совершенно не пугаясь добавляем прямо в функцию генератор ID.
+    //   prepare(title, content, userId) {
+    //     return {
+    //       payload: {
+    //         id: nanoid(),
+    //         // нужно обратить внимание на то, что просто написать date: new Date() мы НЕ можем, хотя на первый взгляд
+    //         // это будет экземпляр даты для конкретного момента времени, когда отработал экшен-криэйтор postAdded.
+    //         // Объясняется это тем, что в Redux можно хранить только SERIALIZABLE данные, а new Date() по мнению
+    //         // Redux - NON_SERIALIZABLE (спорный момент, если учесть, что у Date есть toJSON)
+    //         date: new Date().toISOString(),
+    //         title,
+    //         content,
+    //         user: userId,
+    //         // ВАЖНО! Здесь забыл добавить объект с полями разных реакций на пост и счётчиками для каждой из них и попал на поиски бага на целый час.
+    //         // Идея в том, что все свежесозданные объекты должны иметь поле reactions (оно потом "на местах" считывается для отрисовки кнопок реакций).
+    //         // А так как сам редьюсер просто пушит payload в стейт, а payload мы практически целиком готовим в коллбэке prepare, то именно
+    //         // здесь и нужно позаботиться о добавлении этого поля / свойства
+    //         reactions: {
+    //           thumbsUp: 0,
+    //           hooray: 0,
+    //           heart: 0,
+    //           rocket: 0,
+    //           eyes: 0,
+    //         },
+    //       },
+    //     }
+    //   },
+    // },
     // добавим редьюсер на случай обновления поста
     postUpdated(state, action) {
       // можно было бы написать так и это было бы очень кратко и удобно:
@@ -99,7 +96,7 @@ const postsSlice = createSlice({
       // НО! Тогда у нас происходит по сути замена объекта и возможны лишние перерисовки, которые нам не нужны.
       // Поэтому мы возьмём существующий объект и точечно изменим только то, что меняется:
       const { id, title, content } = action.payload
-      const postToEdit = state.find((elem) => elem.id === id)
+      const postToEdit = state.posts.find((elem) => elem.id === id)
       if (postToEdit) {
         postToEdit.title = title
         postToEdit.content = content
@@ -108,11 +105,39 @@ const postsSlice = createSlice({
     // добавим редьюсер на добавление реакции на пост
     reactionAdded(state, action) {
       const { postId, reaction } = action.payload
-      const existingPost = state.find((post) => post.id === postId)
+      const existingPost = state.posts.find((post) => post.id === postId)
       if (existingPost) {
         existingPost.reactions[reaction]++
       }
     },
+  },
+  // Важная фишка! Наряду с полем / свойством "reducers" нам нужно поле "extraReducers"
+  // Зачем это надо? Дело в том, что когда мы описываем редьюсеры в объекте reducers, то функция createSlice берёт на себя
+  // работу по генерации action-creator'ов. Но проблема в том, что когда мы идём в ОБРАТНОМ направлении - у нас УЖЕ есть action-creator'ы,
+  // но ещё нет работающих с ними редьюсеров (а именно такая ситуация возникает когда мы используем функцию createAsyncThunk), -
+  // то получается, что нам нужен какой-то способ для добавления редьюсеров под эти действия (иначе мы не сможем менять стейт)
+  // extraReducers это и есть тот самый способ!
+  extraReducers(builder) {
+    // builder - это специальный объект, у которого есть разные методы (addCase, addMatcher, addDefaultCase)
+    builder
+      // здесь мы как раз используем метод addCase, который позволяет добавить редьюсер, который будет реагировать на конкретное
+      // действие (в данном случае fetchPosts.pending). Это действие передаётся 1-ым аргументом, а вторым аргументом
+      // передаётся по сути анонимный редьюсер - функция, которая принимает state и action, и что-то делает со стейтом
+      .addCase(fetchPosts.pending, (state, action) => {
+        state.status = 'loading'
+      })
+      .addCase(fetchPosts.fulfilled, (state, action) => {
+        state.status = 'succeeded'
+        state.posts = state.posts.concat(action.payload)
+      })
+      .addCase(fetchPosts.rejected, (state, action) => {
+        state.status = 'failed'
+        state.error = action.error.message
+      })
+      .addCase(addNewPost.fulfilled, (state, action) => {
+      // We can directly add the new post object to our posts array
+      state.posts.push(action.payload)
+    })
   },
 })
 
@@ -139,6 +164,8 @@ export default postsSlice.reducer
 
 // ВАЖНЫЙ НЮАНС: state, который мы используем в этих функциях-селекторах ГЛОБАЛЬНЫЙ, а не локальный
 // то есть если наш текущий слайс с постами в глобальном стейте достижим по ссылке state.posts, то мы так и пишем в селекторах
-export const selectAllPosts = (state) => state.posts
+export const selectAllPosts = (state) => state.posts.posts
 export const selectPostById = (state, postId) =>
-  state.posts.find((post) => post.id === postId)
+  state.posts.posts.find((post) => post.id === postId)
+export const selectPostStatus = (state) => state.posts.status
+export const selectPostError = (state) => state.posts.error
