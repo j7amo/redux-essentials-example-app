@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 
 import { addNewPost } from './postsSlice'
+import { selectAllUsers } from '../users/usersSlice'
 
 export const AddPostForm = () => {
   // возвращаем JSX, в детали которого я особо не вдаюсь
@@ -23,7 +24,7 @@ export const AddPostForm = () => {
 
   // получаем из стейта доступных пользователей (теперь в стейте появилось новое поле state.users, где будут храниться
   // актуальные данные всех пользователей
-  const users = useSelector((state) => state.users)
+  const users = useSelector(selectAllUsers)
 
   // получаем dispatch
   const dispatch = useDispatch()
@@ -35,7 +36,7 @@ export const AddPostForm = () => {
 
   // добавим флаг, на основе которого мы будем принимать решение об активности кнопки
   const canSave =
-      [title, content, userId].every(Boolean) && addRequestStatus === 'idle'
+    [title, content, userId].every(Boolean) && addRequestStatus === 'idle'
 
   // коллбэк для обработки клика по кнопке сабмита формы
   // const onSavePostClick = () => {
@@ -118,7 +119,7 @@ export const AddPostForm = () => {
         />
         <label htmlFor="postAuthor">Author:</label>
         <select id="postAuthor" value={userId} onChange={onAuthorChanged}>
-          <option value=""/>
+          <option value="" />
           {usersOptions}
         </select>
         <label htmlFor="postContent">Content:</label>

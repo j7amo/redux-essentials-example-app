@@ -1,4 +1,8 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import {
+  createSlice,
+  createAsyncThunk,
+  createEntityAdapter,
+} from '@reduxjs/toolkit'
 import { client } from '../../api/client'
 
 export const fetchNotifications = createAsyncThunk(
@@ -28,13 +32,20 @@ export const fetchNotifications = createAsyncThunk(
   }
 )
 
+// так как мы хотим уведомления хранить упорядоченно по дате / времени, то не забываем передать функцию в качестве
+// значения ключа sortComparer
+const notificationsAdapter = createEntityAdapter({
+  sortComparer: (a, b) => b.date.localeCompare(a.date),
+})
+const initialState = notificationsAdapter.getInitialState()
+
 const notificationsSlice = createSlice({
   name: 'notifications',
-  initialState: [],
+  initialState,
   reducers: {
     // редьюсер на случай "отметить все как прочитанные"
     allNotificationsRead(state, action) {
-      state.forEach((notification) => {
+      Object.values(state).forEach((notification) => {
         notification.read = true
       })
     },
@@ -45,8 +56,16 @@ const notificationsSlice = createSlice({
   // это разные случаи и они используют разный синтаксис для описания того, как реагировать на экшены
   extraReducers: {
     [fetchNotifications.fulfilled]: (state, { payload }) => {
-      state.push(...payload)
-      state.forEach(notification => {
+      // в старой редакции (до нормализации) мы работали со стейтом напрямую как с массивом
+      // state.push(...payload)
+
+      // в новой редакции используем метод upsertMany, который принимает массив объектов и обновляет соотв. объекты в entities
+      notificationsAdapter.upsertMany(state, payload)
+
+      // так как нам в рамках этого редьюсера нужно у всех объектов изменить поле, то это удобно делать методом массива,
+      // но state больше не массив, поэтому получаем из объекта объектов ({entities: {},{} и т.д.}) массив объектов
+      // с помощью Object.values()
+      Object.values(state).forEach((notification) => {
         // отметить все уведомления как новые, если они не прочитаны
         notification.isNew = !notification.read
       })
@@ -60,4 +79,9 @@ export default notificationsSlice.reducer
 
 export const { allNotificationsRead } = notificationsSlice.actions
 
-export const selectAllNotifications = (state) => state.notifications
+// селектор в старой (до нормализации) редакции
+// export const selectAllNotifications = (state) => state.notifications
+
+// новая редакция
+export const { selectAll: selectAllNotifications } =
+  notificationsAdapter.getSelectors((state) => state.notifications)
