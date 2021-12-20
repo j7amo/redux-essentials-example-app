@@ -21,7 +21,7 @@ export const fetchNotifications = createAsyncThunk(
     const latestTimestamp = latestNotification ? latestNotification.date : ''
     // этот таймстэмп нам нужен, чтобы обратиться к API для получения действительно свежих уведомлений
     const response = await client.get(
-        `/fakeApi/notifications?since=${latestTimestamp}`
+      `/fakeApi/notifications?since=${latestTimestamp}`
     )
     // обрати внимание: этот thunk в конечном счёте возвращает уже готовые данные (не промис)
     return response.data
@@ -31,7 +31,14 @@ export const fetchNotifications = createAsyncThunk(
 const notificationsSlice = createSlice({
   name: 'notifications',
   initialState: [],
-  reducers: {},
+  reducers: {
+    // редьюсер на случай "отметить все как прочитанные"
+    allNotificationsRead(state, action) {
+      state.forEach((notification) => {
+        notification.read = true
+      })
+    },
+  },
   // наблюдение: идентификатор extraReducers может быть как
   // 1) функцией (extraReducers(builder) {builder.addCase(...)})
   // 2) так и  объектом (extraReducers: [...]: () => {...})
@@ -39,6 +46,10 @@ const notificationsSlice = createSlice({
   extraReducers: {
     [fetchNotifications.fulfilled]: (state, { payload }) => {
       state.push(...payload)
+      state.forEach(notification => {
+        // отметить все уведомления как новые, если они не прочитаны
+        notification.isNew = !notification.read
+      })
       // сортируем наши уведомления по дате: свежие - в начале списка
       state.sort((a, b) => b.date.localeCompare(a.date))
     },
@@ -46,5 +57,7 @@ const notificationsSlice = createSlice({
 })
 
 export default notificationsSlice.reducer
+
+export const { allNotificationsRead } = notificationsSlice.actions
 
 export const selectAllNotifications = (state) => state.notifications

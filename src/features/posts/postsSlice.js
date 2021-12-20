@@ -1,12 +1,30 @@
-import { createSlice, nanoid, createAsyncThunk } from '@reduxjs/toolkit'
+import {
+  createSlice,
+  createAsyncThunk,
+  createSelector,
+  createEntityAdapter,
+} from '@reduxjs/toolkit'
 import { client } from '../../api/client'
 
-// инициализируем начальный стейт
-const initialState = {
-  posts: [],
+// воспользуемся функцией createEntityAdapter из поставки RTK
+// Она позволяет нам нормализовать стейт за счёт того, что создаётся структура данных, которая позволяет каждую сущность
+// хранить под своим уникальным ключом (вместо хранения сущности в массиве, что приводит к необходимости перебирать массив в поисках
+// сущности по ID, а это в худшем случае может быть сложность O(n), что в принципе неплохо, но и неидеально). А также иметь отдельный
+// массив с ID для упрощения отслеживания изменения количества сущностей (при удалении / добавлении сущностей).
+// Такой формат хранения позволяет ускорить извлечение данных из стейта (O(1)) и избежать лишних рендеров.
+const postsAdapter = createEntityAdapter({
+  // в объекте должен быть ключ sortComparer и он должен быть функцией, которая умеет сортировать сущности (порядок сортировки мы определяем сами
+  // - в данном случае мы как и раньше сортируем посты по дате)
+  // эта функция и будет поддерживать массив с ID отсортированным!
+  sortComparer: (a, b) => b.date.localeCompare(a.date),
+})
+
+// инициализируем начальный стейт в новой редакции с использованием функции getInitialState, которая генерирует объект вида {ids: [], entities: {}},
+// а также принимает дополнительно объект, который описывает некую дополнительную структуру стейта (что-то, что нам дополнительно нужно)
+const initialState = postsAdapter.getInitialState({
   status: 'idle',
   error: null,
-}
+})
 
 // функция fetchPosts это thunk-creator
 // мы создаём его с помощью встроенной функции createAsyncThunk, которая принимает 2 аргумента:
@@ -96,7 +114,11 @@ const postsSlice = createSlice({
       // НО! Тогда у нас происходит по сути замена объекта и возможны лишние перерисовки, которые нам не нужны.
       // Поэтому мы возьмём существующий объект и точечно изменим только то, что меняется:
       const { id, title, content } = action.payload
-      const postToEdit = state.posts.find((elem) => elem.id === id)
+      // это старая редакция (до нормализации) поиска поста
+      // const postToEdit = state.posts.find((elem) => elem.id === id)
+
+      // это новая редакция (после нормализации)
+      const postToEdit = state.entities[id]
       if (postToEdit) {
         postToEdit.title = title
         postToEdit.content = content
@@ -105,7 +127,11 @@ const postsSlice = createSlice({
     // добавим редьюсер на добавление реакции на пост
     reactionAdded(state, action) {
       const { postId, reaction } = action.payload
-      const existingPost = state.posts.find((post) => post.id === postId)
+      // это старая редакция (до нормализации) поиска поста
+      // const existingPost = state.posts.find((post) => post.id === postId)
+
+      // это новая редакция (после нормализации)
+      const existingPost = state.entities[postId]
       if (existingPost) {
         existingPost.reactions[reaction]++
       }
@@ -128,16 +154,19 @@ const postsSlice = createSlice({
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
         state.status = 'succeeded'
-        state.posts = state.posts.concat(action.payload)
+        // старая редакция логики редьюсера по части добавления новых постов
+        // state.posts = state.posts.concat(action.payload)
+
+        // в новой редакции используется утилита upsertMany объекта postsAdapter, она позволяет "умно" смёрджить пришедшие изменения с тем, что есть
+        postsAdapter.upsertMany(state, action.payload)
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         state.status = 'failed'
         state.error = action.error.message
       })
-      .addCase(addNewPost.fulfilled, (state, action) => {
-      // We can directly add the new post object to our posts array
-      state.posts.push(action.payload)
-    })
+      // у адаптера есть ряд функций и мы можем использовать их в качестве редьюсеров
+      // здесь, например, мы используем функцию addOne, которая судя по всему добавляет одну сущность
+      .addCase(addNewPost.fulfilled, postsAdapter.addOne)
   },
 })
 
@@ -164,8 +193,44 @@ export default postsSlice.reducer
 
 // ВАЖНЫЙ НЮАНС: state, который мы используем в этих функциях-селекторах ГЛОБАЛЬНЫЙ, а не локальный
 // то есть если наш текущий слайс с постами в глобальном стейте достижим по ссылке state.posts, то мы так и пишем в селекторах
-export const selectAllPosts = (state) => state.posts.posts
-export const selectPostById = (state, postId) =>
-  state.posts.posts.find((post) => post.id === postId)
+// это старая редакция некоторых селекторов
+// export const selectAllPosts = (state) => state.posts.posts
+// export const selectPostById = (state, postId) =>
+//   state.posts.posts.find((post) => post.id === postId)
+
+// новая редакция этих селекторов использует сгенерированные функцией адаптера getSelectors селекторы selectAll, selectById, selectIds
+export const {
+  // помимо ES6-деструктуризации мы здесь пользуемся возможностью задать новые наименования идентификаторов, чтобы нам не пришлось
+  selectAll: selectAllPosts,
+  selectById: selectPostById,
+  selectIds: selectPostIds,
+    // важно не забыть передать в getSelectors селектор, который извлечёт тот кусочек стейта, в котором хранится локальный слайс
+} = postsAdapter.getSelectors(state => state.posts)
+
+// Для начала поговорим немного о мемоизации в целом.
+// Мемоизация в общем это такой процесс, при котором мы возвращаем уже посчитанный (как правило кэшированный) результат,
+// когда входные данные те же самые. Это делается тогда, когда у нас есть какие-то ресурсоёмкие вычисления и нет никакого смысла
+// считать по-новой то, что уже было вычислено на одном из предыдущих этапов.
+// Если говорить о мемоизации в рамках функций-селекторов, то здесь речь идёт о том, что мы хотим возвращать старый результат, если
+// часть глобального стейта, которую мы запрашиваем, не изменилась. Но проблема в том, что есть случаи когда глобальный стейт не меняется,
+// но результатом работы функции-селектора является новая ссылка, например, на массив, так как функция-селектор использует, допустим, filter / map
+// методы, которые при любом раскладе возвращают новую ссылку на массив. Значит, нам нужно эту проблему как-то решить. Нам поможет Reselect.
+
+// создадим мемоизированную версию селектора постов по пользователю
+// для этого воспользуемся функцией createSelector пакета reselect (правда, он теперь судя по всему встроен прямо в RTK)
+// Эта функция принимает в качестве аргументов:
+// 1) массив с любым количеством функций-селекторов.
+// 2) "выходную" функцию-селектор, которая в свою очередь принимает в качестве аргументов результаты работы входных функций-селекторов
+export const selectPostsByUser = createSelector(
+  // вот массив с входными функциями-селекторами
+  // здесь нужно обратить внимание на то, что ТЕ АРГУМЕНТЫ, С КОТОРЫМИ МЫ ВЫЗОВЕМ selectPostsByUser БУДУТ ПЕРЕДАНЫ ВО ВСЕ ВХОДНЫЕ СЕЛЕКТОРЫ
+  // в принципе здесь по входным функциям-селекторам видно, что selectAllPosts от нас ожидает state, а вот второй селектор здесь
+  // по сути ничего на самом деле не извлекает из глобального стейта! Он просто принимает эти аргументы и сразу же возвращает один из аргументов -
+  // мы вынуждены так писать, так как такой интерфейс у createSelector и таким образом мы по сути описываем входные зависимости.
+  [selectAllPosts, (state, userId) => userId],
+  // вот выходная функция-селектор, которая будет возвращать новый результат только, если изменятся входные зависимости!
+  // ещё один момент: аргументы выходного селектора могут быть названы как угодно, это просто плейсхолдеры
+  (posts, userId) => posts.filter((post) => post.user === userId)
+)
 export const selectPostStatus = (state) => state.posts.status
 export const selectPostError = (state) => state.posts.error
