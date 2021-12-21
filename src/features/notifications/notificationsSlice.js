@@ -69,8 +69,9 @@ const notificationsSlice = createSlice({
         // отметить все уведомления как новые, если они не прочитаны
         notification.isNew = !notification.read
       })
-      // сортируем наши уведомления по дате: свежие - в начале списка
-      state.sort((a, b) => b.date.localeCompare(a.date))
+      // сортируем наши уведомления по дате: свежие - в начале списка (старая редакция, теперь здесь сортировка не нужна,
+      // так как она происходит в другом месте - в функции sortComparer адаптера)
+      // state.sort((a, b) => b.date.localeCompare(a.date))
     },
   },
 })
